@@ -38,7 +38,7 @@ function simulate_brownian_motion(steps=1000, dt=0.1, sigma=1.5, seed=42)
 end
 
 # 2. Build the Bonito App for a single seed run
-function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
+function build_app(steps=100, dt=0.1, sigma=1.5, seed=42)
     # Generate trajectory
     x, y, z = simulate_brownian_motion(steps, dt, sigma, seed)
     
@@ -83,52 +83,45 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
         
         # Apply theme
         with_theme(theme) do
-            fig = Figure(size = (900, 720))
-            
-            # 1. Create structured multi-row layout using Makie's layout engine
-            header_grid = fig[1, 1] = GridLayout()
-            
-            # 2. Add interactive slider at row 3
-            sg = Makie.Slider(fig[3, 1], range = 1:steps, startvalue = steps)
-            
-            # Explicitly configure heights of layout rows to prevent overlapping
-            rowsize!(fig.layout, 1, Fixed(60))  # Structured space for Header Labels
-            rowsize!(fig.layout, 2, Auto())     # Auto-expand the 3D Axis3 Plot
-            rowsize!(fig.layout, 3, Fixed(35))  # Spaced height for the Slider
-            
-            # Create step counter label in HTML
-            step_counter_span = DOM.span("$steps", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
-            
-            # 4. Structured Header Labels (Static inside WGLMakie to avoid lift / WebSocket dependency)
-            Makie.Label(
-                header_grid[1, 1],
-                "Interactive 3D Simulation Space",
-                fontsize = 18,
-                font = :bold,
-                color = "#f8fafc",
-                halign = :center
-            )
-            
-            Makie.Label(
-                header_grid[2, 1],
-                "StableRNG seed: $seed",
-                fontsize = 13,
-                font = "Roboto, sans-serif",
-                color = "#38bdf8",
-                halign = :center
-            )
-            
-            # 5. Place the 3D plot in row 2 of the main figure
-            ax = LScene(fig[2, 1], show_axis = true, scenekw = (limits = limits_rect,))
+            # Simple Figure containing only the 3D Plot (no built-in sliders)
+            fig = Figure(size = (900, 600))
+            ax = LScene(fig[1, 1], show_axis = true, scenekw = (limits = limits_rect,))
             
             # Set custom axes names on the 3D axis
             if !isnothing(ax.scene[OldAxis])
                 ax.scene[OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
             end
             
-            # Plot the active trajectory line, with color reflecting time progress up to t
+            # Create interactive Slider using Bonito
+            sg = Bonito.Slider(1:steps, value = steps)
+            t_obs = sg.value
+            
+            # 1. Lift positions for the lines plot to update reactively on the Julia side
+            lines_positions = lift(t_obs) do t
+                pos = Vector{Point3f}(undef, steps)
+                for i in 1:t
+                    pos[i] = Point3f(x[i], y[i], z[i])
+                end
+                last_pt = Point3f(x[t], y[t], z[t])
+                for i in (t+1):steps
+                    pos[i] = last_pt
+                end
+                return pos
+            end
+            
+            # 2. Lift position for the current particle sphere
+            curr_position = lift(t_obs) do t
+                return [Point3f(x[t], y[t], z[t])]
+            end
+            
+            # 3. Lift color for the current particle sphere
+            curr_color = lift(t_obs) do t
+                return [Float64(t)]
+            end
+            
+            # Plot the active trajectory line (dynamic color reflecting progress)
             lines_plot = lines!(
-                ax, x, y, z,
+                ax, lines_positions,
                 color = collect(1.0:Float64(steps)),
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)), # Anchor colormap limits so colors stay stable
@@ -136,10 +129,10 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 label = "Path"
             )
             
-            # Mark Start with a shaded 3D sphere matching the line's start color (t = 1)
+            # Mark Start with a shaded 3D sphere (static)
             meshscatter!(
                 ax,
-                [x[1]], [y[1]], [z[1]],
+                [Point3f(x[1], y[1], z[1])],
                 color = [1.0],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
@@ -148,11 +141,11 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 label = "Start"
             )
             
-            # Mark current particle position as a larger, dynamic shaded 3D sphere matching current time t
+            # Mark current particle position as a dynamic shaded 3D sphere
             curr_plot = meshscatter!(
                 ax,
-                [x[steps]], [y[steps]], [z[steps]],
-                color = [Float64(steps)],
+                curr_position,
+                color = curr_color,
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
                 markersize = 1.4,
@@ -160,63 +153,14 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 label = "Particle"
             )
             
-            # Register client-side interaction (100% offline-compatible, no WebSocket CORS issues)
-            onjs(session, sg.value, js"""(val) => {
-                const t = Math.round(val);
-                if (t < 1) return;
-                
-                // 1. Update step counter label in HTML
-                const counter = $(step_counter_span);
-                if (counter) {
-                    counter.innerText = t;
-                }
-                
-                // 2. Update lines plot positions
-                $(lines_plot).then(plots => {
-                    const plot_mesh = plots[0];
-                    const plot_obj = plot_mesh.plot_object;
-                    
-                    const x = $(x);
-                    const y = $(y);
-                    const z = $(z);
-                    const steps = $(steps);
-                    
-                    // Build the positions array
-                    const new_positions = new Float32Array(steps * 3);
-                    for (let i = 0; i < t; i++) {
-                        new_positions[3 * i] = x[i];
-                        new_positions[3 * i + 1] = y[i];
-                        new_positions[3 * i + 2] = z[i];
-                    }
-                    // For the rest of the vertices, collapse them to the last active position (at index t - 1)
-                    const last_x = x[t - 1];
-                    const last_y = y[t - 1];
-                    const last_z = z[t - 1];
-                    for (let i = t; i < steps; i++) {
-                        new_positions[3 * i] = last_x;
-                        new_positions[3 * i + 1] = last_y;
-                        new_positions[3 * i + 2] = last_z;
-                    }
-                    
-                    plot_obj.update([["positions_transformed_f32c", new_positions]]);
-                });
-                
-                // 3. Update current particle position
-                $(curr_plot).then(plots => {
-                    const plot_mesh = plots[0];
-                    const plot_obj = plot_mesh.plot_object;
-                    
-                    const x = $(x);
-                    const y = $(y);
-                    const z = $(z);
-                    
-                    const particle_pos = new Float32Array([x[t - 1], y[t - 1], z[t - 1]]);
-                    plot_obj.update([["positions_transformed_f32c", particle_pos]]);
-                });
-            }""")
+            # Step counter dynamic span reactively bound to t_obs
+            step_counter_text = lift(t_obs) do t
+                return "$t"
+            end
+            step_counter_span = DOM.span(step_counter_text, style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
             
             # Modern Premium HTML Page wrapping the Makie canvas
-            return DOM.div(
+            dom = DOM.div(
                 style = """
                     min-height: 100vh;
                     background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
@@ -236,7 +180,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         margin-bottom: 2rem;
                     """,
                     DOM.h1(
-                        "3D Brownian Motion Simulation",
+                        "3D Brownian Motion (State Baked)",
                         style = """
                             font-size: 2.8rem;
                             font-weight: 800;
@@ -248,7 +192,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         """
                     ),
                     DOM.p(
-                        DOM.span("Interactive WebGL rendering of a 3D random walk. Seed: $seed | Steps: "),
+                        DOM.span("State-baked WebGL rendering of a 3D random walk. Seed: $seed | Steps: "),
                         step_counter_span,
                         DOM.span(" / $steps"),
                         style = "font-size: 1.15rem; color: #94a3b8; line-height: 1.6;"
@@ -283,9 +227,20 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         width: 100%;
                         max-width: 950px;
                         display: flex;
-                        justify-content: center;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 1.5rem;
                     """,
-                    fig
+                    fig,
+                    # Dynamic native range slider
+                    DOM.div(
+                        style = "width: 100%; max-width: 800px; display: flex; flex-direction: column; gap: 0.5rem;",
+                        DOM.div(
+                            DOM.span("Timeline Scrubber (Pre-Recorded):", style="font-weight: 700; color: #cbd5e1; font-size: 0.95rem;"),
+                            style = "margin-bottom: 0.25rem;"
+                        ),
+                        sg
+                    )
                 ),
                 
                 # Quick description / controls info card
@@ -311,7 +266,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                             DOM.li("Left Click + Drag: Rotate the 3D space"),
                             DOM.li("Right Click + Drag: Pan across the canvas"),
                             DOM.li("Scroll Wheel: Zoom in and out"),
-                            DOM.li("Slider (Bottom of Plot): Drag to scrub through simulation time"),
+                            DOM.li("HTML Slider: Scrub through pre-recorded simulation time"),
                             style = "padding-left: 1.25rem; margin: 0; color: #cbd5e1; line-height: 1.5;"
                         )
                     ),
@@ -327,7 +282,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         DOM.h3("⚙️ Simulation Params", style="font-weight: 700; margin-top: 0; color: #818cf8; margin-bottom: 0.5rem;"),
                         DOM.p("Steps: $(steps) | dt: $(dt) | σ: $(sigma)", style="color: #cbd5e1; margin-bottom: 0.25rem; font-family: monospace;"),
                         DOM.p("StableRNG Seed: $(seed)", style="color: #38bdf8; font-weight: bold; font-family: monospace; margin-bottom: 0.5rem;"),
-                        DOM.p("The trajectory color transitions from purple/blue (start) to yellow/red (end), representing temporal progression.", style="color: #94a3b8; font-size: 0.9rem; margin: 0; line-height: 1.4;")
+                        DOM.p("The state changes for each of the $steps ticks are baked directly into this offline HTML page.", style="color: #94a3b8; font-size: 0.9rem; margin: 0; line-height: 1.4;")
                     )
                 ),
                 
@@ -344,6 +299,8 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                     style = "margin-top: 3rem; color: #475569; font-size: 0.85rem; font-weight: 500;"
                 )
             )
+            
+            return Bonito.record_states(session, dom)
         end
     end
 end

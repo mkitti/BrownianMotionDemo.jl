@@ -3,5 +3,6 @@
 /scratch/
 *.log
 
-# Generated static outputs - unignored for GitHub Pages
-# (We allow index.html and brownian-motion-demo-*.html to be committed)
+# Generated static outputs - ignored on this branch to avoid committing massive baked states
+index.html
+brownian-motion-demo-*.html
