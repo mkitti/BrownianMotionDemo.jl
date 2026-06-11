@@ -6,6 +6,11 @@ using Bonito
 
 export simulate_brownian_motion, build_app, build_index_page, build_live_app, main
 
+function __init__()
+    # Automatically configure WGLMakie with HTML widgets for CORS-free, self-contained files
+    WGLMakie.activate!(use_html_widgets = true)
+end
+
 # 1. Simulate Brownian Motion with a stable seed
 function simulate_brownian_motion(steps=1000, dt=0.1, sigma=1.5, seed=42)
     # Use StableRNG for reproducible behavior across all systems & Julia versions
