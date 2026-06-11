@@ -1,4 +1,4 @@
-module JuliaExportStatic
+module BrownianMotionDemo
 
 using StableRNGs
 using WGLMakie
