@@ -91,6 +91,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
             # Set custom axes names on the 3D axis
             if !isnothing(ax.scene[Makie.OldAxis])
                 ax.scene[Makie.OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+                ax.scene[Makie.OldAxis][:names][][:textcolor][] = ("#e2e8f0", "#e2e8f0", "#e2e8f0")
             end
             
             # Create interactive Slider using Bonito
@@ -507,6 +508,7 @@ function build_live_app(seeds, steps, dt, sigma)
             # Set custom axes names on the 3D axis
             if !isnothing(ax.scene[Makie.OldAxis])
                 ax.scene[Makie.OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+                ax.scene[Makie.OldAxis][:names][][:textcolor][] = ("#e2e8f0", "#e2e8f0", "#e2e8f0")
             end
             
             # Create interactive Slider using Bonito
