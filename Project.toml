@@ -1,0 +1,13 @@
+name = "JuliaExportStatic"
+uuid = "f593da3d-c6a7-4a4a-9744-dc941f9973ab"
+authors = ["mkitti <mkitti@users.noreply.github.com>"]
+version = "0.1.0"
+
+[deps]
+Bonito = "824d6782-a2ef-11e9-3a09-e5662e0c26f8"
+StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
+WGLMakie = "276b4fcb-3e11-5398-bf8b-a0c2d153d008"
+
+[apps]
+julia-export-static = {}
+
