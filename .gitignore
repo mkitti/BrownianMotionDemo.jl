@@ -1,0 +1,7 @@
+# Julia precompilation and cache files
+.julia/
+/scratch/
+*.log
+
+# Generated static outputs - unignored for GitHub Pages
+# (We allow index.html and brownian-motion-demo-*.html to be committed)
