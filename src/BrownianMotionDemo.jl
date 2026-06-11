@@ -227,19 +227,21 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         DOM.span(" / $steps"),
                         style = "font-size: 1.15rem; color: #94a3b8; line-height: 1.6;"
                     ),
-                    DOM.a(
-                        "◀ Return to Simulation Gallery",
-                        href = "index.html",
-                        style = """
-                            display: inline-block;
-                            margin-top: 1rem;
-                            color: #818cf8;
-                            text-decoration: none;
-                            font-weight: 700;
-                            font-size: 0.95rem;
-                            transition: color 0.2s ease;
-                        """,
-                        class = "back-btn"
+                    DOM.div(
+                        style = "display: flex; gap: 1.5rem; justify-content: center; margin-top: 1rem; flex-wrap: wrap;",
+                        DOM.a(
+                            "◀ Return to Simulation Gallery",
+                            href = "index.html",
+                            style = "color: #818cf8; text-decoration: none; font-weight: 700; font-size: 0.95rem; transition: color 0.2s ease;",
+                            class = "hover-link"
+                        ),
+                        DOM.a(
+                            "📂 View GitHub Repository",
+                            href = "https://github.com/mkitti/BrownianMotionDemo.jl",
+                            target = "_blank",
+                            style = "color: #38bdf8; text-decoration: none; font-weight: 700; font-size: 0.95rem; transition: color 0.2s ease;",
+                            class = "hover-link"
+                        )
                     )
                 ),
                 
@@ -316,8 +318,8 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 ),
                 
                 DOM.style("""
-                    .back-btn:hover {
-                        color: #38bdf8 !important;
+                    .hover-link:hover {
+                        color: #60a5fa !important;
                         text-decoration: underline !important;
                     }
                 """),
@@ -365,6 +367,25 @@ function build_index_page(seeds, steps, dt, sigma)
                 DOM.p(
                     "Explore interactive, seed-reproducible 3D random walks. Click any simulation card below to inspect its path, scrub through its timeline, and analyze its WebGL trajectory.",
                     style = "font-size: 1.2rem; color: #cbd5e1; line-height: 1.6;"
+                ),
+                DOM.a(
+                    "📂 View GitHub Repository",
+                    href = "https://github.com/mkitti/BrownianMotionDemo.jl",
+                    target = "_blank",
+                    style = """
+                        display: inline-block;
+                        margin-top: 1.25rem;
+                        background: rgba(56, 189, 248, 0.1);
+                        border: 1px solid rgba(56, 189, 248, 0.3);
+                        color: #38bdf8;
+                        text-decoration: none;
+                        font-weight: 700;
+                        font-size: 1rem;
+                        padding: 0.6rem 1.5rem;
+                        border-radius: 9999px;
+                        transition: all 0.25s ease;
+                    """,
+                    class = "github-btn"
                 )
             ),
             
@@ -422,6 +443,12 @@ function build_index_page(seeds, steps, dt, sigma)
                     border-color: rgba(56, 189, 248, 0.4) !important;
                     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.3) !important;
                     background: rgba(30, 41, 59, 0.6) !important;
+                }
+                .github-btn:hover {
+                    background: rgba(56, 189, 248, 0.2) !important;
+                    border-color: #38bdf8 !important;
+                    box-shadow: 0 4px 12px rgba(56, 189, 248, 0.2) !important;
+                    color: #fff !important;
                 }
             """),
             
@@ -662,6 +689,13 @@ function build_live_app(seeds, steps, dt, sigma)
                         step_counter_span,
                         DOM.span(" / $steps"),
                         style = "font-size: 1.15rem; color: #94a3b8; line-height: 1.6;"
+                    ),
+                    DOM.a(
+                        "📂 View GitHub Repository",
+                        href = "https://github.com/mkitti/BrownianMotionDemo.jl",
+                        target = "_blank",
+                        style = "color: #38bdf8; text-decoration: none; font-weight: 700; font-size: 0.95rem; transition: color 0.2s ease;",
+                        class = "hover-link"
                     )
                 ),
                 
@@ -783,12 +817,15 @@ function build_live_app(seeds, steps, dt, sigma)
                     )
                 ),
                 
-                # Injected Stylesheet for Premium hover effects
                 DOM.style("""
                     .seed-btn:hover {
                         background: rgba(56, 189, 248, 0.1) !important;
                         border-color: rgba(56, 189, 248, 0.5) !important;
                         color: #fff !important;
+                    }
+                    .hover-link:hover {
+                        color: #60a5fa !important;
+                        text-decoration: underline !important;
                     }
                 """),
                 
