@@ -324,7 +324,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 
                 # Footer
                 DOM.div(
-                    "Generated with Julia, WGLMakie.jl, and Bonito.jl",
+                    "Generated with Julia, WGLMakie.jl, Bonito.jl, and Antigravity (powered by Gemini Flash 3.5)",
                     style = "margin-top: 3rem; color: #475569; font-size: 0.85rem; font-weight: 500;"
                 )
             )
@@ -427,7 +427,7 @@ function build_index_page(seeds, steps, dt, sigma)
             
             # Footer
             DOM.div(
-                "Generated with Julia, WGLMakie.jl, and Bonito.jl • Prepared for GitHub Pages",
+                "Generated with Julia, WGLMakie.jl, Bonito.jl, and Antigravity (powered by Gemini Flash 3.5) • Prepared for GitHub Pages",
                 style = "margin-top: auto; color: #475569; font-size: 0.85rem; font-weight: 500;"
             )
         )
@@ -794,7 +794,7 @@ function build_live_app(seeds, steps, dt, sigma)
                 
                 # Footer
                 DOM.div(
-                    "Generated with Julia, WGLMakie.jl, and Bonito.jl",
+                    "Generated with Julia, WGLMakie.jl, Bonito.jl, and Antigravity (powered by Gemini Flash 3.5)",
                     style = "margin-top: 3rem; color: #475569; font-size: 0.85rem; font-weight: 500;"
                 )
             )
