@@ -136,27 +136,27 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                 label = "Path"
             )
             
-            # Mark Start with a 3D sphere matching the line's start color (t = 1)
-            scatter!(
+            # Mark Start with a shaded 3D sphere matching the line's start color (t = 1)
+            meshscatter!(
                 ax,
                 [x[1]], [y[1]], [z[1]],
                 color = [1.0],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 12, # Point size for scatter!
-                marker = :circle,
+                markersize = 1.0,
+                shading = true,
                 label = "Start"
             )
             
-            # Mark current particle position as a larger, dynamic 3D sphere matching current time t
-            curr_plot = scatter!(
+            # Mark current particle position as a larger, dynamic shaded 3D sphere matching current time t
+            curr_plot = meshscatter!(
                 ax,
                 [x[steps]], [y[steps]], [z[steps]],
                 color = [Float64(steps)],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 16, # Slightly larger point size to stand out
-                marker = :circle,
+                markersize = 1.4,
+                shading = true,
                 label = "Particle"
             )
             
@@ -211,7 +211,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                     const z = $(z);
                     
                     const particle_pos = new Float32Array([x[t - 1], y[t - 1], z[t - 1]]);
-                    plot_obj.update([["wgl_positions", particle_pos]]);
+                    plot_obj.update([["positions_transformed_f32c", particle_pos]]);
                 });
             }""")
             
@@ -570,8 +570,8 @@ function build_live_app(seeds, steps, dt, sigma)
                 label = "Path"
             )
             
-            # Mark Start with a 3D sphere matching the line's start color (t = 1)
-            start_plot = scatter!(
+            # Mark Start with a shaded 3D sphere matching the line's start color (t = 1)
+            start_plot = meshscatter!(
                 ax,
                 lift(xv -> [xv[1]], x),
                 lift(yv -> [yv[1]], y),
@@ -579,13 +579,13 @@ function build_live_app(seeds, steps, dt, sigma)
                 color = [1.0],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 12,
-                marker = :circle,
+                markersize = 1.0,
+                shading = true,
                 label = "Start"
             )
             
-            # Mark current particle position as a larger, dynamic 3D sphere matching current time t
-            curr_plot = scatter!(
+            # Mark current particle position as a larger, dynamic shaded 3D sphere matching current time t
+            curr_plot = meshscatter!(
                 ax,
                 lift(xv -> [xv[steps]], x),
                 lift(yv -> [yv[steps]], y),
@@ -593,8 +593,8 @@ function build_live_app(seeds, steps, dt, sigma)
                 color = [Float64(steps)],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 16,
-                marker = :circle,
+                markersize = 1.4,
+                shading = true,
                 label = "Particle"
             )
             
@@ -653,7 +653,7 @@ function build_live_app(seeds, steps, dt, sigma)
                     if (!x || !y || !z) return;
                     
                     const particle_pos = new Float32Array([x[t - 1], y[t - 1], z[t - 1]]);
-                    plot_obj.update([["wgl_positions", particle_pos]]);
+                    plot_obj.update([["positions_transformed_f32c", particle_pos]]);
                 });
             }""")
             
