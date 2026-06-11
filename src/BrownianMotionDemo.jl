@@ -3,6 +3,7 @@ module BrownianMotionDemo
 using StableRNGs
 using WGLMakie
 using Bonito
+using Makie
 
 export simulate_brownian_motion, build_app, build_index_page, build_live_app, main
 
@@ -41,6 +42,22 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
     # Generate trajectory
     x, y, z = simulate_brownian_motion(steps, dt, sigma, seed)
     
+    ext_x = extrema(x)
+    ext_y = extrema(y)
+    ext_z = extrema(z)
+    
+    span_x = max(ext_x[2] - ext_x[1], 1e-5)
+    span_y = max(ext_y[2] - ext_y[1], 1e-5)
+    span_z = max(ext_z[2] - ext_z[1], 1e-5)
+    
+    pad_x = span_x * 0.05
+    pad_y = span_y * 0.05
+    pad_z = span_z * 0.05
+    
+    origin = (ext_x[1] - pad_x, ext_y[1] - pad_y, ext_z[1] - pad_z)
+    widths = (span_x + 2*pad_x, span_y + 2*pad_y, span_z + 2*pad_z)
+    limits_rect = Rect3f(origin, widths)
+    
     app = App() do session
         # Create an elegant theme for the WGLMakie figure with highly visible gridlines
         theme = Theme(
@@ -73,30 +90,19 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
             
             # 2. Add interactive slider at row 3
             sg = Makie.Slider(fig[3, 1], range = 1:steps, startvalue = steps)
-            t_obs = sg.value
             
             # Explicitly configure heights of layout rows to prevent overlapping
             rowsize!(fig.layout, 1, Fixed(60))  # Structured space for Header Labels
             rowsize!(fig.layout, 2, Auto())     # Auto-expand the 3D Axis3 Plot
             rowsize!(fig.layout, 3, Fixed(35))  # Spaced height for the Slider
             
-            # 3. Slice trajectory arrays dynamically based on the current slider value
-            x_sub = lift(t -> x[1:t], t_obs)
-            y_sub = lift(t -> y[1:t], t_obs)
-            z_sub = lift(t -> z[1:t], t_obs)
-            colors_sub = lift(t -> collect(1:t), t_obs)
+            # Create step counter label in HTML
+            step_counter_span = DOM.span("$steps", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
             
-            # Dynamic position of the particle at step t
-            x_curr = lift(t -> [x[t]], t_obs)
-            y_curr = lift(t -> [y[t]], t_obs)
-            z_curr = lift(t -> [z[t]], t_obs)
-            
-            # 4. Structured Header Labels (Title in row 1, Subtitle in row 2 of header grid)
-            title_text = lift(t -> "Interactive 3D Brownian Motion Path (Seed: $seed | t = $t / $steps)", t_obs)
-            
+            # 4. Structured Header Labels (Static inside WGLMakie to avoid lift / WebSocket dependency)
             Makie.Label(
                 header_grid[1, 1],
-                title_text,
+                "Interactive 3D Simulation Space",
                 fontsize = 18,
                 font = :bold,
                 color = "#f8fafc",
@@ -105,7 +111,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
             
             Makie.Label(
                 header_grid[2, 1],
-                "Reproducible Generation • StableRNG seed: $seed",
+                "StableRNG seed: $seed",
                 fontsize = 13,
                 font = "Roboto, sans-serif",
                 color = "#38bdf8",
@@ -113,49 +119,101 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
             )
             
             # 5. Place the 3D plot in row 2 of the main figure
-            ax = Axis3(
-                fig[2, 1],
-                xlabel = "X Position",
-                ylabel = "Y Position",
-                zlabel = "Z Position",
-            )
+            ax = LScene(fig[2, 1], show_axis = true, scenekw = (limits = limits_rect,))
+            
+            # Set custom axes names on the 3D axis
+            if !isnothing(ax.scene[OldAxis])
+                ax.scene[OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+            end
             
             # Plot the active trajectory line, with color reflecting time progress up to t
-            lines!(
-                ax, x_sub, y_sub, z_sub,
-                color = colors_sub,
+            lines_plot = lines!(
+                ax, x, y, z,
+                color = collect(1.0:Float64(steps)),
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)), # Anchor colormap limits so colors stay stable
                 linewidth = 3.5,
                 label = "Path"
             )
             
-            # Lift color corresponding to the current step t
-            color_curr = lift(t -> [Float64(t)], t_obs)
-            
-            # Mark Start with a shaded 3D sphere matching the line's start color (t = 1)
-            meshscatter!(
+            # Mark Start with a 3D sphere matching the line's start color (t = 1)
+            scatter!(
                 ax,
                 [x[1]], [y[1]], [z[1]],
                 color = [1.0],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 1.0, # Physical radius in coordinates
-                shading = true,
+                markersize = 12, # Point size for scatter!
+                marker = :circle,
                 label = "Start"
             )
             
-            # Mark current particle position as a larger, dynamic shaded 3D sphere matching current time t
-            meshscatter!(
+            # Mark current particle position as a larger, dynamic 3D sphere matching current time t
+            curr_plot = scatter!(
                 ax,
-                x_curr, y_curr, z_curr,
-                color = color_curr,
+                [x[steps]], [y[steps]], [z[steps]],
+                color = [Float64(steps)],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 1.4, # Slightly larger physical radius to stand out
-                shading = true,
+                markersize = 16, # Slightly larger point size to stand out
+                marker = :circle,
                 label = "Particle"
             )
+            
+            # Register client-side interaction (100% offline-compatible, no WebSocket CORS issues)
+            onjs(session, sg.value, js"""(val) => {
+                const t = Math.round(val);
+                if (t < 1) return;
+                
+                // 1. Update step counter label in HTML
+                const counter = $(step_counter_span);
+                if (counter) {
+                    counter.innerText = t;
+                }
+                
+                // 2. Update lines plot positions
+                $(lines_plot).then(plots => {
+                    const plot_mesh = plots[0];
+                    const plot_obj = plot_mesh.plot_object;
+                    
+                    const x = $(x);
+                    const y = $(y);
+                    const z = $(z);
+                    const steps = $(steps);
+                    
+                    // Build the positions array
+                    const new_positions = new Float32Array(steps * 3);
+                    for (let i = 0; i < t; i++) {
+                        new_positions[3 * i] = x[i];
+                        new_positions[3 * i + 1] = y[i];
+                        new_positions[3 * i + 2] = z[i];
+                    }
+                    // For the rest of the vertices, collapse them to the last active position (at index t - 1)
+                    const last_x = x[t - 1];
+                    const last_y = y[t - 1];
+                    const last_z = z[t - 1];
+                    for (let i = t; i < steps; i++) {
+                        new_positions[3 * i] = last_x;
+                        new_positions[3 * i + 1] = last_y;
+                        new_positions[3 * i + 2] = last_z;
+                    }
+                    
+                    plot_obj.update([["positions_transformed_f32c", new_positions]]);
+                });
+                
+                // 3. Update current particle position
+                $(curr_plot).then(plots => {
+                    const plot_mesh = plots[0];
+                    const plot_obj = plot_mesh.plot_object;
+                    
+                    const x = $(x);
+                    const y = $(y);
+                    const z = $(z);
+                    
+                    const particle_pos = new Float32Array([x[t - 1], y[t - 1], z[t - 1]]);
+                    plot_obj.update([["wgl_positions", particle_pos]]);
+                });
+            }""")
             
             # Modern Premium HTML Page wrapping the Makie canvas
             return DOM.div(
@@ -190,7 +248,9 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         """
                     ),
                     DOM.p(
-                        "Interactive WebGL rendering of a single particle performing a random walk in three dimensions.",
+                        DOM.span("Interactive WebGL rendering of a 3D random walk. Seed: $seed | Steps: "),
+                        step_counter_span,
+                        DOM.span(" / $steps"),
                         style = "font-size: 1.15rem; color: #94a3b8; line-height: 1.6;"
                     ),
                     DOM.a(
@@ -392,6 +452,32 @@ end
 
 # 4. Build Unified Multi-Seed Live App (for 'serve' mode)
 function build_live_app(seeds, steps, dt, sigma)
+    # Compute global extrema across all seeds to maintain stable, non-jumping bounds
+    all_x = Float64[]
+    all_y = Float64[]
+    all_z = Float64[]
+    for s in seeds
+        sx, sy, sz = simulate_brownian_motion(steps, dt, sigma, s)
+        append!(all_x, sx)
+        append!(all_y, sy)
+        append!(all_z, sz)
+    end
+    ext_x = extrema(all_x)
+    ext_y = extrema(all_y)
+    ext_z = extrema(all_z)
+    
+    span_x = max(ext_x[2] - ext_x[1], 1e-5)
+    span_y = max(ext_y[2] - ext_y[1], 1e-5)
+    span_z = max(ext_z[2] - ext_z[1], 1e-5)
+    
+    pad_x = span_x * 0.05
+    pad_y = span_y * 0.05
+    pad_z = span_z * 0.05
+    
+    origin = (ext_x[1] - pad_x, ext_y[1] - pad_y, ext_z[1] - pad_z)
+    widths = (span_x + 2*pad_x, span_y + 2*pad_y, span_z + 2*pad_z)
+    limits_rect = Rect3f(origin, widths)
+
     App() do session
         # Track selected seed
         current_seed = Observable(seeds[1])
@@ -437,57 +523,29 @@ function build_live_app(seeds, steps, dt, sigma)
             
             # 2. Add interactive slider at row 3
             sg = Makie.Slider(fig[3, 1], range = 1:steps, startvalue = steps)
-            t_obs = sg.value
             
             # Explicitly configure heights of layout rows to prevent overlapping
             rowsize!(fig.layout, 1, Fixed(60))
             rowsize!(fig.layout, 2, Auto())
             rowsize!(fig.layout, 3, Fixed(35))
             
-            # 3. Slice trajectory arrays dynamically based on current slider value AND current trajectory
-            x_sub = lift(t_obs, x) do t, xv
-                xv[1:t]
-            end
-            y_sub = lift(t_obs, y) do t, yv
-                yv[1:t]
-            end
-            z_sub = lift(t_obs, z) do t, zv
-                zv[1:t]
-            end
-            colors_sub = lift(t -> collect(1:t), t_obs)
+            # Create step counter label and active seed label in HTML
+            step_counter_span = DOM.span("$steps", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
+            active_seed_span = DOM.span("$(seeds[1])", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
             
-            # Dynamic position of the particle at step t
-            x_curr = lift(t_obs, x) do t, xv
-                [xv[t]]
-            end
-            y_curr = lift(t_obs, y) do t, yv
-                [yv[t]]
-            end
-            z_curr = lift(t_obs, z) do t, zv
-                [zv[t]]
-            end
-            
-            # 4. Structured Header Labels (Title in row 1, Subtitle in row 2 of header grid)
-            title_text = lift(t_obs, current_seed) do t, s
-                "Interactive 3D Brownian Motion Path (Seed: $s | t = $t / $steps)"
-            end
-            
+            # 4. Structured Header Labels (Static inside WGLMakie to avoid lift / WebSocket dependency)
             Makie.Label(
                 header_grid[1, 1],
-                title_text,
+                "Interactive 3D Simulation Space",
                 fontsize = 18,
                 font = :bold,
                 color = "#f8fafc",
                 halign = :center
             )
             
-            subtitle_text = lift(current_seed) do s
-                "Reproducible Generation • StableRNG seed: $s"
-            end
-            
             Makie.Label(
                 header_grid[2, 1],
-                subtitle_text,
+                "Reproducible Generation Space",
                 fontsize = 13,
                 font = "Roboto, sans-serif",
                 color = "#38bdf8",
@@ -495,28 +553,25 @@ function build_live_app(seeds, steps, dt, sigma)
             )
             
             # 5. Place the 3D plot in row 2 of the main figure
-            ax = Axis3(
-                fig[2, 1],
-                xlabel = "X Position",
-                ylabel = "Y Position",
-                zlabel = "Z Position",
-            )
+            ax = LScene(fig[2, 1], show_axis = true, scenekw = (limits = limits_rect,))
             
-            # Plot active trajectory line
-            lines!(
-                ax, x_sub, y_sub, z_sub,
-                color = colors_sub,
+            # Set custom axes names on the 3D axis
+            if !isnothing(ax.scene[OldAxis])
+                ax.scene[OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+            end
+            
+            # Plot active trajectory line (automatically updates when x, y, z change in Julia)
+            lines_plot = lines!(
+                ax, x, y, z,
+                color = collect(1.0:Float64(steps)),
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
                 linewidth = 3.5,
                 label = "Path"
             )
             
-            # Lift color corresponding to the current step t
-            color_curr = lift(t -> [Float64(t)], t_obs)
-            
-            # Mark Start with a shaded 3D sphere matching the line's start color (t = 1)
-            meshscatter!(
+            # Mark Start with a 3D sphere matching the line's start color (t = 1)
+            start_plot = scatter!(
                 ax,
                 lift(xv -> [xv[1]], x),
                 lift(yv -> [yv[1]], y),
@@ -524,22 +579,91 @@ function build_live_app(seeds, steps, dt, sigma)
                 color = [1.0],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 1.0,
-                shading = true,
+                markersize = 12,
+                marker = :circle,
                 label = "Start"
             )
             
-            # Mark current particle position as a larger, dynamic shaded 3D sphere matching current time t
-            meshscatter!(
+            # Mark current particle position as a larger, dynamic 3D sphere matching current time t
+            curr_plot = scatter!(
                 ax,
-                x_curr, y_curr, z_curr,
-                color = color_curr,
+                lift(xv -> [xv[steps]], x),
+                lift(yv -> [yv[steps]], y),
+                lift(zv -> [zv[steps]], z),
+                color = [Float64(steps)],
                 colormap = :turbo,
                 colorrange = (1.0, Float64(steps)),
-                markersize = 1.4,
-                shading = true,
+                markersize = 16,
+                marker = :circle,
                 label = "Particle"
             )
+            
+            # Register client-side interaction (100% smooth 60 FPS slider updates with NO network latency)
+            onjs(session, sg.value, js"""(val) => {
+                const t = Math.round(val);
+                if (t < 1) return;
+                
+                // 1. Update step counter label in HTML
+                const counter = $(step_counter_span);
+                if (counter) {
+                    counter.innerText = t;
+                }
+                
+                // 2. Update lines plot positions
+                $(lines_plot).then(plots => {
+                    const plot_mesh = plots[0];
+                    const plot_obj = plot_mesh.plot_object;
+                    
+                    const x = $(x).value;
+                    const y = $(y).value;
+                    const z = $(z).value;
+                    const steps = $(steps);
+                    
+                    if (!x || !y || !z) return;
+                    
+                    // Build the positions array
+                    const new_positions = new Float32Array(steps * 3);
+                    for (let i = 0; i < t; i++) {
+                        new_positions[3 * i] = x[i];
+                        new_positions[3 * i + 1] = y[i];
+                        new_positions[3 * i + 2] = z[i];
+                    }
+                    // For the rest of the vertices, collapse them to the last active position (at index t - 1)
+                    const last_x = x[t - 1];
+                    const last_y = y[t - 1];
+                    const last_z = z[t - 1];
+                    for (let i = t; i < steps; i++) {
+                        new_positions[3 * i] = last_x;
+                        new_positions[3 * i + 1] = last_y;
+                        new_positions[3 * i + 2] = last_z;
+                    }
+                    
+                    plot_obj.update([["positions_transformed_f32c", new_positions]]);
+                });
+                
+                // 3. Update current particle position
+                $(curr_plot).then(plots => {
+                    const plot_mesh = plots[0];
+                    const plot_obj = plot_mesh.plot_object;
+                    
+                    const x = $(x).value;
+                    const y = $(y).value;
+                    const z = $(z).value;
+                    
+                    if (!x || !y || !z) return;
+                    
+                    const particle_pos = new Float32Array([x[t - 1], y[t - 1], z[t - 1]]);
+                    plot_obj.update([["wgl_positions", particle_pos]]);
+                });
+            }""")
+            
+            # Listen to current_seed changes to instantly update active seed span
+            onjs(session, current_seed, js"""(s) => {
+                const span = $(active_seed_span);
+                if (span) {
+                    span.innerText = s;
+                }
+            }""")
             
             # Modern Premium HTML Page wrapping the Makie canvas
             return DOM.div(
@@ -574,7 +698,11 @@ function build_live_app(seeds, steps, dt, sigma)
                         """
                     ),
                     DOM.p(
-                        "Interactive WebGL rendering of a single particle performing a random walk in three dimensions.",
+                        DOM.span("Interactive WebGL rendering of a 3D random walk. Active Seed: "),
+                        active_seed_span,
+                        DOM.span(" | Steps: "),
+                        step_counter_span,
+                        DOM.span(" / $steps"),
                         style = "font-size: 1.15rem; color: #94a3b8; line-height: 1.6;"
                     )
                 ),
@@ -614,11 +742,12 @@ function build_live_app(seeds, steps, dt, sigma)
                                 transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                             """
                         end
-                        btn = DOM.button("🎲 Seed $s", style = btn_style, class="seed-btn")
-                        on(session, btn, "click") do _
-                            current_seed[] = s
-                            sg.value[] = steps
-                        end
+                        btn = DOM.button(
+                            "🎲 Seed $s",
+                            style = btn_style,
+                            class = "seed-btn",
+                            onclick = js"() => { $(current_seed).notify($s); $(sg.value).notify($(steps)); }"
+                        )
                         return btn
                     end...
                 ),
