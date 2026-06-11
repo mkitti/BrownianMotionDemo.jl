@@ -83,48 +83,21 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
         
         # Apply theme
         with_theme(theme) do
-            fig = Figure(size = (900, 720))
+            fig = Figure(size = (1200, 750), figure_padding = 5)
             
-            # 1. Create structured multi-row layout using Makie's layout engine
-            header_grid = fig[1, 1] = GridLayout()
+            # Place the 3D plot to occupy the full figure space
+            ax = LScene(fig[1, 1], show_axis = true, scenekw = (limits = limits_rect,))
             
-            # 2. Add interactive slider at row 3
-            sg = Makie.Slider(fig[3, 1], range = 1:steps, startvalue = steps)
+            # Set custom axes names on the 3D axis
+            if !isnothing(ax.scene[Makie.OldAxis])
+                ax.scene[Makie.OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+            end
             
-            # Explicitly configure heights of layout rows to prevent overlapping
-            rowsize!(fig.layout, 1, Fixed(60))  # Structured space for Header Labels
-            rowsize!(fig.layout, 2, Auto())     # Auto-expand the 3D Axis3 Plot
-            rowsize!(fig.layout, 3, Fixed(35))  # Spaced height for the Slider
+            # Create interactive Slider using Bonito
+            sg = Bonito.Slider(1:steps, value = steps)
             
             # Create step counter label in HTML
             step_counter_span = DOM.span("$steps", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
-            
-            # 4. Structured Header Labels (Static inside WGLMakie to avoid lift / WebSocket dependency)
-            Makie.Label(
-                header_grid[1, 1],
-                "Interactive 3D Simulation Space",
-                fontsize = 18,
-                font = :bold,
-                color = "#f8fafc",
-                halign = :center
-            )
-            
-            Makie.Label(
-                header_grid[2, 1],
-                "StableRNG seed: $seed",
-                fontsize = 13,
-                font = "Roboto, sans-serif",
-                color = "#38bdf8",
-                halign = :center
-            )
-            
-            # 5. Place the 3D plot in row 2 of the main figure
-            ax = LScene(fig[2, 1], show_axis = true, scenekw = (limits = limits_rect,))
-            
-            # Set custom axes names on the 3D axis
-            if !isnothing(ax.scene[OldAxis])
-                ax.scene[OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
-            end
             
             # Plot the active trajectory line, with color reflecting time progress up to t
             lines_plot = lines!(
@@ -281,11 +254,21 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
                         margin-bottom: 2rem;
                         width: 100%;
-                        max-width: 950px;
+                        max-width: 1250px;
                         display: flex;
-                        justify-content: center;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 1.5rem;
                     """,
-                    fig
+                    fig,
+                    DOM.div(
+                        style = "width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 0.5rem;",
+                        DOM.div(
+                            DOM.span("Timeline Scrubber:", style="font-weight: 700; color: #cbd5e1; font-size: 0.95rem;"),
+                            style = "margin-bottom: 0.25rem;"
+                        ),
+                        sg
+                    )
                 ),
                 
                 # Quick description / controls info card
@@ -294,7 +277,7 @@ function build_app(steps=1000, dt=0.1, sigma=1.5, seed=42)
                         display: flex;
                         gap: 1.5rem;
                         width: 100%;
-                        max-width: 950px;
+                        max-width: 1250px;
                         flex-wrap: wrap;
                     """,
                     DOM.div(
@@ -391,7 +374,7 @@ function build_index_page(seeds, steps, dt, sigma)
                     grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
                     gap: 2rem;
                     width: 100%;
-                    max-width: 1000px;
+                    max-width: 1250px;
                     margin-bottom: 4rem;
                 """,
                 map(seeds) do s
@@ -516,49 +499,22 @@ function build_live_app(seeds, steps, dt, sigma)
         
         # Apply theme
         with_theme(theme) do
-            fig = Figure(size = (900, 720))
+            fig = Figure(size = (1200, 750), figure_padding = 5)
             
-            # 1. Create structured multi-row layout using Makie's layout engine
-            header_grid = fig[1, 1] = GridLayout()
+            # Place the 3D plot to occupy the full figure space
+            ax = LScene(fig[1, 1], show_axis = true, scenekw = (limits = limits_rect,))
             
-            # 2. Add interactive slider at row 3
-            sg = Makie.Slider(fig[3, 1], range = 1:steps, startvalue = steps)
+            # Set custom axes names on the 3D axis
+            if !isnothing(ax.scene[Makie.OldAxis])
+                ax.scene[Makie.OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
+            end
             
-            # Explicitly configure heights of layout rows to prevent overlapping
-            rowsize!(fig.layout, 1, Fixed(60))
-            rowsize!(fig.layout, 2, Auto())
-            rowsize!(fig.layout, 3, Fixed(35))
+            # Create interactive Slider using Bonito
+            sg = Bonito.Slider(1:steps, value = steps)
             
             # Create step counter label and active seed label in HTML
             step_counter_span = DOM.span("$steps", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
             active_seed_span = DOM.span("$(seeds[1])", style = "color: #38bdf8; font-weight: bold; font-family: monospace;")
-            
-            # 4. Structured Header Labels (Static inside WGLMakie to avoid lift / WebSocket dependency)
-            Makie.Label(
-                header_grid[1, 1],
-                "Interactive 3D Simulation Space",
-                fontsize = 18,
-                font = :bold,
-                color = "#f8fafc",
-                halign = :center
-            )
-            
-            Makie.Label(
-                header_grid[2, 1],
-                "Reproducible Generation Space",
-                fontsize = 13,
-                font = "Roboto, sans-serif",
-                color = "#38bdf8",
-                halign = :center
-            )
-            
-            # 5. Place the 3D plot in row 2 of the main figure
-            ax = LScene(fig[2, 1], show_axis = true, scenekw = (limits = limits_rect,))
-            
-            # Set custom axes names on the 3D axis
-            if !isnothing(ax.scene[OldAxis])
-                ax.scene[OldAxis][:names][][:axisnames][] = ("X Position", "Y Position", "Z Position")
-            end
             
             # Plot active trajectory line (automatically updates when x, y, z change in Julia)
             lines_plot = lines!(
@@ -764,11 +720,21 @@ function build_live_app(seeds, steps, dt, sigma)
                         box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
                         margin-bottom: 2rem;
                         width: 100%;
-                        max-width: 950px;
+                        max-width: 1250px;
                         display: flex;
-                        justify-content: center;
+                        flex-direction: column;
+                        align-items: center;
+                        gap: 1.5rem;
                     """,
-                    fig
+                    fig,
+                    DOM.div(
+                        style = "width: 100%; max-width: 1100px; display: flex; flex-direction: column; gap: 0.5rem;",
+                        DOM.div(
+                            DOM.span("Timeline Scrubber:", style="font-weight: 700; color: #cbd5e1; font-size: 0.95rem;"),
+                            style = "margin-bottom: 0.25rem;"
+                        ),
+                        sg
+                    )
                 ),
                 
                 # Quick description / controls info card
@@ -777,7 +743,7 @@ function build_live_app(seeds, steps, dt, sigma)
                         display: flex;
                         gap: 1.5rem;
                         width: 100%;
-                        max-width: 950px;
+                        max-width: 1250px;
                         flex-wrap: wrap;
                     """,
                     DOM.div(
